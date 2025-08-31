@@ -1,6 +1,8 @@
 #!/bin/bash
 
 sendmail -f "noreply@panelright.com" $1 <<EOF
+From: PanelRight <noreply@panelright.com>
+To: $1
 Subject: Please Authenticate Yourself to PanelRight
 MIME-Version: 1.0
 Content-Type: text/html; charset=UTF-8

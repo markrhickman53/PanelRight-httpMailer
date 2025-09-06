@@ -7,10 +7,34 @@ set -euo pipefail
 
 # Configuration variables
 SERVICE_NAME="httpmailer"
-SERVICE_USER="httpmailer"
+
+# Choose the right configuration for your environment:
+# For production environment (default)
+PROD_SERVICE_USER="httpmailer"
+PROD_VENV_PATH="/home/httpmailer/.local/venv"
+PROD_INSTALL_DIR="/opt/httpmailer"
+
+# For development environment (Pi setup)
+DEV_SERVICE_USER="mark"
+DEV_VENV_PATH="/home/mark/.local/venv"
+DEV_INSTALL_DIR="/home/mark/httpMailer"
+
+# Set which environment to use
+# Set USE_DEV=1 for development environment, or USE_DEV=0 for production
+USE_DEV=0
+
+# Apply the selected configuration
+if [ "$USE_DEV" -eq 1 ]; then
+    SERVICE_USER="$DEV_SERVICE_USER"
+    VENV_PATH="$DEV_VENV_PATH"
+    INSTALL_DIR="$DEV_INSTALL_DIR"
+else
+    SERVICE_USER="$PROD_SERVICE_USER"
+    VENV_PATH="$PROD_VENV_PATH"
+    INSTALL_DIR="$PROD_INSTALL_DIR"
+fi
+
 SERVICE_PORT="8080"
-VENV_PATH="/home/httpmailer/.local/venv"
-INSTALL_DIR="/opt/httpmailer"
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Colors for output
@@ -128,14 +152,19 @@ EOF
 
 # Create service user
 create_service_user() {
-    log_info "Creating service user: $SERVICE_USER"
-    
-    # Create system user for the service
-    if ! id "$SERVICE_USER" &>/dev/null; then
-        useradd --system --no-create-home --shell /usr/sbin/nologin "$SERVICE_USER"
-        log_success "Service user '$SERVICE_USER' created"
+    if [ "$USE_DEV" -eq 1 ]; then
+        log_info "Using existing user: $SERVICE_USER"
+        log_success "Service user confirmed"
     else
-        log_warning "Service user '$SERVICE_USER' already exists"
+        log_info "Creating service user: $SERVICE_USER"
+        
+        # Create system user for the service
+        if ! id "$SERVICE_USER" &>/dev/null; then
+            useradd --system --no-create-home --shell /usr/sbin/nologin "$SERVICE_USER"
+            log_success "Service user '$SERVICE_USER' created"
+        else
+            log_warning "Service user '$SERVICE_USER' already exists"
+        fi
     fi
 }
 
@@ -161,16 +190,21 @@ setup_python_venv() {
 
 # Install httpMailer files
 install_httpmailer_files() {
-    log_info "Installing httpMailer files to $INSTALL_DIR"
-    
-    # Create installation directory
-    mkdir -p "$INSTALL_DIR"
-    mkdir -p "$INSTALL_DIR/utils"
-    
-    # Copy application files
-    cp "$CURRENT_DIR/http_server.py" "$INSTALL_DIR/"
-    cp "$CURRENT_DIR/utils/authenticate.sh" "$INSTALL_DIR/utils/"
-    cp "$CURRENT_DIR/utils/contactUS.sh" "$INSTALL_DIR/utils/"
+    if [ "$USE_DEV" -eq 1 ]; then
+        log_info "Configuring httpMailer files in $INSTALL_DIR"
+        # Files already in place - just set permissions
+    else
+        log_info "Installing httpMailer files to $INSTALL_DIR"
+        
+        # Create installation directory
+        mkdir -p "$INSTALL_DIR"
+        mkdir -p "$INSTALL_DIR/utils"
+        
+        # Copy application files
+        cp "$CURRENT_DIR/http_server.py" "$INSTALL_DIR/"
+        cp "$CURRENT_DIR/utils/authenticate.sh" "$INSTALL_DIR/utils/"
+        cp "$CURRENT_DIR/utils/contactUS.sh" "$INSTALL_DIR/utils/"
+    fi
     
     # Make scripts executable
     chmod +x "$INSTALL_DIR/http_server.py"
@@ -180,7 +214,11 @@ install_httpmailer_files() {
     # Set ownership
     chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
     
-    log_success "httpMailer files installed"
+    if [ "$USE_DEV" -eq 1 ]; then
+        log_success "httpMailer files configured"
+    else
+        log_success "httpMailer files installed"
+    fi
 }
 
 # Create systemd service file
